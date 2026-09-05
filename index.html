@@ -209,7 +209,7 @@ async function syncNow(){
     let j=await r.json();if(j.data){state=j.data;save();render()}syncState.textContent="✓ Google Drive senkron";syncState.className="syncok";
   }catch(e){syncState.textContent="✕ Senkron hatası";syncState.className="syncbad";alert("Google Drive senkronizasyonu başarısız: "+e.message)}
 }
-if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js");
+if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js?v=5.1").then(r=>r.update());
 let lastMobile=isMobile();window.addEventListener("resize",()=>{let m=isMobile();if(m!==lastMobile){lastMobile=m;render()}});
 render();
 </script>
