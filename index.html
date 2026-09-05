@@ -117,12 +117,17 @@ let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
   people:[],records:{},week:"2026-08-31",month:"2026-09",view:"weekly",apiUrl:""
 };
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()}
-function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+let syncTimer=null,lastCloudCheck=0;
+function save(dataChanged=false){
+  if(dataChanged) state.dataUpdatedAt=new Date().toISOString();
+  localStorage.setItem(KEY,JSON.stringify(state));
+  if(dataChanged&&state.apiUrl){clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(true),700)}
+}
 function D(s){return new Date(s+"T12:00:00")}function iso(d){return d.toISOString().slice(0,10)}
 function daysOfWeek(){let d=D(state.week),a=[];for(let i=0;i<7;i++){let x=new Date(d);x.setDate(d.getDate()+i);a.push(x)}return a}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function status(id,date){return state.records[date]?.[id]||""}
-function cycle(id,date){let s=status(id,date),n=s===""?"Çalıştı":s==="Çalıştı"?"Gelmedi":s==="Gelmedi"?"İzinli":s==="İzinli"?"Raporlu":"";state.records[date]??={};if(n)state.records[date][id]=n;else delete state.records[date][id];save();render()}
+function cycle(id,date){let s=status(id,date),n=s===""?"Çalıştı":s==="Çalıştı"?"Gelmedi":s==="Gelmedi"?"İzinli":s==="İzinli"?"Raporlu":"";state.records[date]??={};if(n)state.records[date][id]=n;else delete state.records[date][id];save(true);render()}
 function cls(s){return s==="Çalıştı"?"c":s==="Gelmedi"?"g":s==="İzinli"?"i":s==="Raporlu"?"r":"b"}function mark(s){return s==="Çalıştı"?"✓":s==="Gelmedi"?"✕":s==="İzinli"?"İ":s==="Raporlu"?"R":"—"}
 
 function refreshSelectors(){
@@ -169,12 +174,12 @@ function renderMonthly(){
 }
 function render(){refreshSelectors();weeklyBtn.classList.toggle("active",state.view==="weekly");monthlyBtn.classList.toggle("active",state.view==="monthly");state.view==="weekly"?renderWeekly():renderMonthly()}
 
-function addPerson(){let n=newName.value.trim();if(!n)return alert("İsim girin.");state.people.push({id:uid(),name:n,site:newSite.value,team:newTeam.value,type:newType.value});newName.value="";save();render()}
-function deletePerson(id){let p=state.people.find(x=>x.id===id);if(!p||!confirm(p.name+" listeden çıkarılsın mı? Geçmiş puantaj kayıtları korunur."))return;state.people=state.people.filter(x=>x.id!==id);save();render()}
-function addSite(){let n=siteName.value.trim();if(!n||state.sites.some(s=>s.name===n))return alert("Geçerli ve benzersiz bir şantiye adı girin.");state.sites.push({name:n,teams:["Diğer"]});siteName.value="";save();render()}
-function deleteSite(name){if(!confirm(name+" şantiyesi ve içindeki aktif işçiler silinsin mi? Geçmiş kayıtlar korunur."))return;state.people=state.people.filter(p=>p.site!==name);state.sites=state.sites.filter(s=>s.name!==name);save();render()}
-function addTeam(){let n=teamName.value.trim(),s=state.sites.find(x=>x.name===teamSite.value);if(!n||!s||s.teams.includes(n))return alert("Geçerli ve benzersiz ekip adı girin.");s.teams.push(n);teamName.value="";save();render()}
-function deleteTeam(site,team){let s=state.sites.find(x=>x.name===site);if(!s||!confirm(site+" / "+team+" ekibi ve aktif işçileri silinsin mi? Geçmiş kayıtlar korunur."))return;state.people=state.people.filter(p=>!(p.site===site&&p.team===team));s.teams=s.teams.filter(t=>t!==team);save();render()}
+function addPerson(){let n=newName.value.trim();if(!n)return alert("İsim girin.");state.people.push({id:uid(),name:n,site:newSite.value,team:newTeam.value,type:newType.value});newName.value="";save(true);render()}
+function deletePerson(id){let p=state.people.find(x=>x.id===id);if(!p||!confirm(p.name+" listeden çıkarılsın mı? Geçmiş puantaj kayıtları korunur."))return;state.people=state.people.filter(x=>x.id!==id);save(true);render()}
+function addSite(){let n=siteName.value.trim();if(!n||state.sites.some(s=>s.name===n))return alert("Geçerli ve benzersiz bir şantiye adı girin.");state.sites.push({name:n,teams:["Diğer"]});siteName.value="";save(true);render()}
+function deleteSite(name){if(!confirm(name+" şantiyesi ve içindeki aktif işçiler silinsin mi? Geçmiş kayıtlar korunur."))return;state.people=state.people.filter(p=>p.site!==name);state.sites=state.sites.filter(s=>s.name!==name);save(true);render()}
+function addTeam(){let n=teamName.value.trim(),s=state.sites.find(x=>x.name===teamSite.value);if(!n||!s||s.teams.includes(n))return alert("Geçerli ve benzersiz ekip adı girin.");s.teams.push(n);teamName.value="";save(true);render()}
+function deleteTeam(site,team){let s=state.sites.find(x=>x.name===site);if(!s||!confirm(site+" / "+team+" ekibi ve aktif işçileri silinsin mi? Geçmiş kayıtlar korunur."))return;state.people=state.people.filter(p=>!(p.site===site&&p.team===team));s.teams=s.teams.filter(t=>t!==team);save(true);render()}
 
 function openReports(){reportModal.classList.add("open");let now=new Date(),first=new Date(now.getFullYear(),now.getMonth(),1,12);reportStart.value=iso(first);reportEnd.value=iso(now);refreshReportTargets()}
 function closeReports(){reportModal.classList.remove("open")}
@@ -200,18 +205,22 @@ function renderPermanentMonthlyReport(){
   for(const r of rows)h+=`<tr><td><b>${esc(r.name)}</b><div class="muted mobileOnly">${esc(r.site)} · ${esc(r.team)}</div></td><td class="hideMobile">${esc(r.site)}</td><td class="hideMobile">${esc(r.team)}</td><td class="num"><b>${r.worked}</b></td><td class="num">${r.abs}</td><td class="num">${r.leave}</td><td class="num">${r.report}</td></tr>`;
   h+="</tbody></table></div>";permanentMonthlyResult.innerHTML=h;
 }
-function saveApi(){state.apiUrl=apiUrl.value.trim();save();syncState.textContent=state.apiUrl?"Drive bağlantısı kaydedildi":"Drive bağlantısı yok"}
-async function syncNow(){
-  if(!state.apiUrl)return alert("Önce Apps Script Web App URL'sini girin.");
-  syncState.textContent="Senkronize ediliyor…";
+function saveApi(){state.apiUrl=apiUrl.value.trim();save(false);syncState.textContent=state.apiUrl?"Drive bağlantısı kaydedildi":"Drive bağlantısı yok";if(state.apiUrl)syncNow(true)}
+async function syncNow(silent=false){
+  if(!state.apiUrl){if(!silent)alert("Önce Apps Script Web App URL'sini girin.");return}
+  if(!silent)syncState.textContent="Senkronize ediliyor…";
   try{
     let r=await fetch(state.apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"sync",data:state})});
-    let j=await r.json();if(j.data){state=j.data;save();render()}syncState.textContent="✓ Google Drive senkron";syncState.className="syncok";
-  }catch(e){syncState.textContent="✕ Senkron hatası";syncState.className="syncbad";alert("Google Drive senkronizasyonu başarısız: "+e.message)}
+    let j=await r.json();if(!j.ok)throw new Error(j.error||"Senkronizasyon başarısız");
+    if(j.data){let api=state.apiUrl;state=j.data;state.apiUrl=state.apiUrl||api;save(false);render()}
+    syncState.textContent=j.direction==="pull"?"✓ Drive'dan güncellendi":"✓ Google Drive senkron";syncState.className="syncok";lastCloudCheck=Date.now();
+  }catch(e){syncState.textContent="✕ Senkron hatası";syncState.className="syncbad";if(!silent)alert("Google Drive senkronizasyonu başarısız: "+e.message)}
 }
-if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js?v=5.1").then(r=>r.update());
+function checkCloud(){if(state.apiUrl&&Date.now()-lastCloudCheck>2500)syncNow(true)}
+if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js?v=5.2").then(r=>r.update());
 let lastMobile=isMobile();window.addEventListener("resize",()=>{let m=isMobile();if(m!==lastMobile){lastMobile=m;render()}});
-render();
+window.addEventListener("focus",checkCloud);document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkCloud()});
+render();setTimeout(checkCloud,500);
 </script>
 </body>
 </html>
