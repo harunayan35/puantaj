@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#111827">
 <link rel="manifest" href="manifest.webmanifest">
 <title>Puantaj</title>
+<!-- V5: mobile-first layout + permanent workers monthly report -->
 <style>
 :root{--bg:#f5f6f8;--card:#fff;--line:#e5e7eb;--text:#1f2937;--muted:#6b7280;--dark:#111827}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -22,6 +23,11 @@ button{cursor:pointer;font-weight:650}.dark{background:var(--dark);color:#fff;bo
 .modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:15px;z-index:20}.modal.open{display:flex}.modalbox{background:#fff;border-radius:14px;max-width:700px;width:100%;padding:16px;max-height:90vh;overflow:auto}
 .row{display:flex;gap:8px;flex-wrap:wrap}.grow{flex:1}.syncok{color:#1f7a35}.syncbad{color:#a22a2a}
 @media(max-width:800px){.app{padding:10px}.top{align-items:flex-start}.grid,.reportgrid{grid-template-columns:1fr 1fr}.sitehead,.teamhead{align-items:flex-start}}
+
+.mobileOnly{display:none}.monthReportTable{width:100%;min-width:0}.monthReportTable th,.monthReportTable td{text-align:left}.monthReportTable td.num,.monthReportTable th.num{text-align:center}.summarybar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.summarypill{background:#f3f4f6;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:700}
+@media(max-width:800px){
+  body{background:#eef1f4}.app{padding:8px;padding-bottom:26px}.top{display:block;margin-bottom:8px}h1{font-size:21px}.top .toolbar{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:7px}.top .toolbar button{width:100%;min-height:44px}.card{border-radius:12px;padding:10px;margin-bottom:9px}.toolbar{gap:6px}.card>.toolbar{display:grid;grid-template-columns:1fr 1fr}.card>.toolbar #search{grid-column:1/-1}.card>.toolbar #periodTitle{grid-column:1/-1;text-align:center;padding:4px 0;font-size:14px}.card>.toolbar #syncState{grid-column:1/-1;text-align:center}.grid,.reportgrid{grid-template-columns:1fr}.row{display:grid;grid-template-columns:1fr}.row .grow{width:100%}button,input,select{min-height:44px;font-size:16px}.desktopOnly{display:none!important}.mobileOnly{display:block}.site{overflow:visible}.sitehead,.teamhead{align-items:center;padding:10px;gap:6px}.sitehead button,.teamhead button{min-height:36px;padding:6px 8px;font-size:12px}.mobileWorker{background:#fff;border-top:1px solid var(--line);padding:10px}.mobileWorkerHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px}.mobileWorkerName{font-weight:800;font-size:16px}.mobileWorkerMeta{font-size:11px;color:var(--muted);margin-top:2px}.weekCells{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.dayBox{text-align:center}.dayLabel{font-size:10px;color:var(--muted);margin-bottom:4px}.dayDate{font-size:9px;color:var(--muted);margin-top:2px}.weekCells .cell{width:100%;height:42px;border-radius:9px}.mobileActions{display:flex;justify-content:flex-end;margin-top:8px}.mobileActions button{min-height:34px;font-size:12px;padding:5px 9px}.monthDays{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:7px}.monthDay{border-radius:8px;background:#f5f6f8;text-align:center;padding:5px 2px;min-height:45px}.monthDay .dn{font-size:9px;color:var(--muted)}.monthDay .dm{font-size:13px;font-weight:800;margin-top:2px}.monthTotal{font-size:18px;font-weight:900;background:#eef2f7;border-radius:9px;padding:8px 10px;white-space:nowrap}.modal{padding:6px;align-items:flex-end}.modalbox{border-radius:16px 16px 0 0;max-height:94vh;padding:12px}.monthReportTable{font-size:13px}.monthReportTable th,.monthReportTable td{padding:8px 4px}.summarybar{display:grid;grid-template-columns:1fr 1fr}.summarypill{text-align:center;border-radius:9px}.hideMobile{display:none!important}
+}
 </style>
 </head>
 <body>
@@ -32,6 +38,7 @@ button{cursor:pointer;font-weight:650}.dark{background:var(--dark);color:#fff;bo
     <button id="weeklyBtn" class="active" onclick="setView('weekly')">Haftalık</button>
     <button id="monthlyBtn" onclick="setView('monthly')">Aylık</button>
     <button onclick="openReports()">Yevmiye Raporu</button>
+    <button onclick="openPermanentMonthlyReport()">Sürekli İşçiler Aylık</button>
     <button class="dark" onclick="syncNow()">☁ Senkronize</button>
   </div>
 </div>
@@ -93,6 +100,16 @@ button{cursor:pointer;font-weight:650}.dark{background:var(--dark);color:#fff;bo
   <div id="reportResult" style="margin-top:12px"></div>
 </div></div>
 
+
+<div id="permanentMonthlyModal" class="modal"><div class="modalbox">
+  <div class="row" style="display:flex"><h2 style="margin:0">Sürekli İşçiler Aylık Yevmiye</h2><button class="danger" style="margin-left:auto" onclick="closePermanentMonthlyReport()">Kapat</button></div>
+  <div class="row" style="margin-top:12px;align-items:center">
+    <input id="permanentReportMonth" type="month" onchange="renderPermanentMonthlyReport()">
+    <span class="muted">Seçilen aydaki tüm sürekli işçiler</span>
+  </div>
+  <div id="permanentMonthlyResult" style="margin-top:12px"></div>
+</div></div>
+
 <script>
 const KEY="puantaj-v4";
 let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
@@ -121,26 +138,33 @@ function filtered(){let sf=siteFilter.value,tf=typeFilter.value,q=search.value.t
 function setView(v){state.view=v;save();render()}
 function movePeriod(n){if(state.view==="weekly"){let d=D(state.week);d.setDate(d.getDate()+7*n);state.week=iso(d)}else{let [y,m]=state.month.split("-").map(Number),d=new Date(y,m-1+n,1,12);state.month=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}save();render()}
 
+function isMobile(){return window.matchMedia("(max-width:800px)").matches}
 function renderWeekly(){
   weekly.style.display="block";monthly.style.display="none";weekly.innerHTML="";let ds=daysOfWeek(),ppl=filtered();
   periodTitle.textContent=ds[0].toLocaleDateString("tr-TR",{day:"numeric",month:"long"})+" – "+ds[6].toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"});
   for(const site of state.sites){let sp=ppl.filter(p=>p.site===site.name);if(!sp.length)continue;
     let h=`<div class="card site"><div class="sitehead"><span>🏗️ ${esc(site.name)} <span class="muted">(${sp.length} işçi)</span></span><button class="danger" onclick='deleteSite(${JSON.stringify(site.name)})'>Şantiyeyi Sil</button></div>`;
     for(const team of site.teams){let tp=sp.filter(p=>p.team===team);if(!tp.length)continue;
-      h+=`<div class="teamhead"><span>${esc(team)}</span><button class="danger" onclick='deleteTeam(${JSON.stringify(site.name)},${JSON.stringify(team)})'>Ekibi Sil</button></div><div class="tablewrap"><table><thead><tr><th>İşçi</th><th>Tip</th><th>Pzt</th><th>Sal</th><th>Çar</th><th>Per</th><th>Cum</th><th>Cmt</th><th>Paz</th><th></th></tr></thead><tbody>`;
-      for(const p of tp){let cells=ds.map(d=>{let k=iso(d),s=status(p.id,k);return `<td><div class="cell ${cls(s)}" onclick='cycle("${p.id}","${k}")'>${mark(s)}</div></td>`}).join("");
-        h+=`<tr><td class="name">${esc(p.name)}</td><td class="type">${p.type}</td>${cells}<td><button class="danger" onclick='deletePerson("${p.id}")'>Sil</button></td></tr>`}
-      h+="</tbody></table></div>";
+      h+=`<div class="teamhead"><span>${esc(team)}</span><button class="danger" onclick='deleteTeam(${JSON.stringify(site.name)},${JSON.stringify(team)})'>Ekibi Sil</button></div>`;
+      if(isMobile()){
+        for(const p of tp){let cells=ds.map((d,i)=>{let k=iso(d),st=status(p.id,k);return `<div class="dayBox"><div class="dayLabel">${["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"][i]}</div><div class="cell ${cls(st)}" onclick='cycle("${p.id}","${k}")'>${mark(st)}</div><div class="dayDate">${d.getDate()}</div></div>`}).join("");h+=`<div class="mobileWorker"><div class="mobileWorkerHead"><div><div class="mobileWorkerName">${esc(p.name)}</div><div class="mobileWorkerMeta">${esc(p.type)}</div></div></div><div class="weekCells">${cells}</div><div class="mobileActions"><button class="danger" onclick='deletePerson("${p.id}")'>İşçiyi Sil</button></div></div>`}
+      }else{
+        h+=`<div class="tablewrap"><table><thead><tr><th>İşçi</th><th>Tip</th><th>Pzt</th><th>Sal</th><th>Çar</th><th>Per</th><th>Cum</th><th>Cmt</th><th>Paz</th><th></th></tr></thead><tbody>`;
+        for(const p of tp){let cells=ds.map(d=>{let k=iso(d),st=status(p.id,k);return `<td><div class="cell ${cls(st)}" onclick='cycle("${p.id}","${k}")'>${mark(st)}</div></td>`}).join("");h+=`<tr><td class="name">${esc(p.name)}</td><td class="type">${p.type}</td>${cells}<td><button class="danger" onclick='deletePerson("${p.id}")'>Sil</button></td></tr>`}h+="</tbody></table></div>";
+      }
     }h+="</div>";weekly.insertAdjacentHTML("beforeend",h)}
 }
 function renderMonthly(){
   weekly.style.display="none";monthly.style.display="block";monthly.innerHTML="";let [y,m]=state.month.split("-").map(Number),n=new Date(y,m,0).getDate(),ppl=filtered();
   periodTitle.textContent=new Date(y,m-1,1).toLocaleDateString("tr-TR",{month:"long",year:"numeric"});
   for(const site of state.sites){let sp=ppl.filter(p=>p.site===site.name);if(!sp.length)continue;let h=`<div class="card site"><div class="sitehead">🏗️ ${esc(site.name)}</div>`;
-    for(const team of site.teams){let tp=sp.filter(p=>p.team===team);if(!tp.length)continue;h+=`<div class="teamhead">${esc(team)}</div><div class="tablewrap"><table><thead><tr><th>İşçi</th><th>Tip</th>`;
-      for(let d=1;d<=n;d++)h+=`<th>${d}</th>`;h+="<th>Yevmiye</th></tr></thead><tbody>";
-      for(const p of tp){let total=0,c="";for(let d=1;d<=n;d++){let k=state.month+"-"+String(d).padStart(2,"0"),s=status(p.id,k);if(s==="Çalıştı")total++;c+=`<td>${mark(s)}</td>`}h+=`<tr><td class="name">${esc(p.name)}</td><td class="type">${p.type}</td>${c}<td><b>${total}</b></td></tr>`}
-      h+="</tbody></table></div>";
+    for(const team of site.teams){let tp=sp.filter(p=>p.team===team);if(!tp.length)continue;h+=`<div class="teamhead">${esc(team)}</div>`;
+      if(isMobile()){
+        for(const p of tp){let total=0,days="";for(let d=1;d<=n;d++){let k=state.month+"-"+String(d).padStart(2,"0"),st=status(p.id,k);if(st==="Çalıştı")total++;days+=`<div class="monthDay ${cls(st)}"><div class="dn">${d}</div><div class="dm">${mark(st)}</div></div>`}h+=`<div class="mobileWorker"><div class="mobileWorkerHead"><div><div class="mobileWorkerName">${esc(p.name)}</div><div class="mobileWorkerMeta">${esc(p.type)}</div></div><div class="monthTotal">${total} yev.</div></div><div class="monthDays">${days}</div></div>`}
+      }else{
+        h+=`<div class="tablewrap"><table><thead><tr><th>İşçi</th><th>Tip</th>`;for(let d=1;d<=n;d++)h+=`<th>${d}</th>`;h+="<th>Yevmiye</th></tr></thead><tbody>";
+        for(const p of tp){let total=0,c="";for(let d=1;d<=n;d++){let k=state.month+"-"+String(d).padStart(2,"0"),st=status(p.id,k);if(st==="Çalıştı")total++;c+=`<td>${mark(st)}</td>`}h+=`<tr><td class="name">${esc(p.name)}</td><td class="type">${p.type}</td>${c}<td><b>${total}</b></td></tr>`}h+="</tbody></table></div>";
+      }
     }h+="</div>";monthly.insertAdjacentHTML("beforeend",h)}
 }
 function render(){refreshSelectors();weeklyBtn.classList.toggle("active",state.view==="weekly");monthlyBtn.classList.toggle("active",state.view==="monthly");state.view==="weekly"?renderWeekly():renderMonthly()}
@@ -163,6 +187,19 @@ function calculateReport(){
   for(const [date,rec] of Object.entries(state.records)){if(date<start||date>end)continue;for(const id of ids){let st=rec[id];if(st==="Çalıştı")worked++;else if(st==="Gelmedi")abs++;else if(st==="İzinli")leave++;else if(st==="Raporlu")report++}}
   reportResult.innerHTML=`<div class="reportgrid"><div class="stat"><b>${worked}</b><span>Yevmiye</span></div><div class="stat"><b>${abs}</b><span>Gelmedi</span></div><div class="stat"><b>${leave}</b><span>İzin</span></div><div class="stat"><b>${report}</b><span>Rapor</span></div></div>`;
 }
+function openPermanentMonthlyReport(){permanentMonthlyModal.classList.add("open");permanentReportMonth.value=state.month||new Date().toISOString().slice(0,7);renderPermanentMonthlyReport()}
+function closePermanentMonthlyReport(){permanentMonthlyModal.classList.remove("open")}
+function renderPermanentMonthlyReport(){
+  let month=permanentReportMonth.value;if(!month)return;let [y,m]=month.split("-").map(Number),n=new Date(y,m,0).getDate(),people=state.people.filter(p=>p.type==="Sürekli");
+  let rows=[],grand=0;for(const p of people){let worked=0,abs=0,leave=0,report=0;for(let d=1;d<=n;d++){let k=month+"-"+String(d).padStart(2,"0"),st=status(p.id,k);if(st==="Çalıştı")worked++;else if(st==="Gelmedi")abs++;else if(st==="İzinli")leave++;else if(st==="Raporlu")report++}grand+=worked;rows.push({...p,worked,abs,leave,report})}
+  rows.sort((a,b)=>a.site.localeCompare(b.site,"tr")||a.team.localeCompare(b.team,"tr")||a.name.localeCompare(b.name,"tr"));
+  let monthName=new Date(y,m-1,1).toLocaleDateString("tr-TR",{month:"long",year:"numeric"});
+  let h=`<div class="summarybar"><div class="summarypill">${esc(monthName)}</div><div class="summarypill">${people.length} sürekli işçi</div><div class="summarypill">Toplam ${grand} yevmiye</div></div>`;
+  if(!rows.length){permanentMonthlyResult.innerHTML=h+'<div class="muted">Sürekli işçi bulunmuyor.</div>';return}
+  h+=`<div class="tablewrap"><table class="monthReportTable"><thead><tr><th>İşçi</th><th class="hideMobile">Şantiye</th><th class="hideMobile">Ekip</th><th class="num">Yevmiye</th><th class="num">Gelmedi</th><th class="num">İzin</th><th class="num">Rapor</th></tr></thead><tbody>`;
+  for(const r of rows)h+=`<tr><td><b>${esc(r.name)}</b><div class="muted mobileOnly">${esc(r.site)} · ${esc(r.team)}</div></td><td class="hideMobile">${esc(r.site)}</td><td class="hideMobile">${esc(r.team)}</td><td class="num"><b>${r.worked}</b></td><td class="num">${r.abs}</td><td class="num">${r.leave}</td><td class="num">${r.report}</td></tr>`;
+  h+="</tbody></table></div>";permanentMonthlyResult.innerHTML=h;
+}
 function saveApi(){state.apiUrl=apiUrl.value.trim();save();syncState.textContent=state.apiUrl?"Drive bağlantısı kaydedildi":"Drive bağlantısı yok"}
 async function syncNow(){
   if(!state.apiUrl)return alert("Önce Apps Script Web App URL'sini girin.");
@@ -173,6 +210,7 @@ async function syncNow(){
   }catch(e){syncState.textContent="✕ Senkron hatası";syncState.className="syncbad";alert("Google Drive senkronizasyonu başarısız: "+e.message)}
 }
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js");
+let lastMobile=isMobile();window.addEventListener("resize",()=>{let m=isMobile();if(m!==lastMobile){lastMobile=m;render()}});
 render();
 </script>
 </body>
