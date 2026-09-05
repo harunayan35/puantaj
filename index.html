@@ -117,11 +117,11 @@ let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
   people:[],records:{},week:"2026-08-31",month:"2026-09",view:"weekly",apiUrl:""
 };
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()}
-let syncTimer=null,lastCloudCheck=0;
+let syncTimer=null,lastCloudCheck=0,isSyncing=false;
 function save(dataChanged=false){
-  if(dataChanged) state.dataUpdatedAt=new Date().toISOString();
+  if(dataChanged) state.localDirty=true;
   localStorage.setItem(KEY,JSON.stringify(state));
-  if(dataChanged&&state.apiUrl){clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(true),700)}
+  if(dataChanged&&state.apiUrl){clearTimeout(syncTimer);syncTimer=setTimeout(()=>pushNow(true),700)}
 }
 function D(s){return new Date(s+"T12:00:00")}function iso(d){return d.toISOString().slice(0,10)}
 function daysOfWeek(){let d=D(state.week),a=[];for(let i=0;i<7;i++){let x=new Date(d);x.setDate(d.getDate()+i);a.push(x)}return a}
@@ -205,19 +205,28 @@ function renderPermanentMonthlyReport(){
   for(const r of rows)h+=`<tr><td><b>${esc(r.name)}</b><div class="muted mobileOnly">${esc(r.site)} · ${esc(r.team)}</div></td><td class="hideMobile">${esc(r.site)}</td><td class="hideMobile">${esc(r.team)}</td><td class="num"><b>${r.worked}</b></td><td class="num">${r.abs}</td><td class="num">${r.leave}</td><td class="num">${r.report}</td></tr>`;
   h+="</tbody></table></div>";permanentMonthlyResult.innerHTML=h;
 }
-function saveApi(){state.apiUrl=apiUrl.value.trim();save(false);syncState.textContent=state.apiUrl?"Drive bağlantısı kaydedildi":"Drive bağlantısı yok";if(state.apiUrl)syncNow(true)}
-async function syncNow(silent=false){
-  if(!state.apiUrl){if(!silent)alert("Önce Apps Script Web App URL'sini girin.");return}
-  if(!silent)syncState.textContent="Senkronize ediliyor…";
-  try{
-    let r=await fetch(state.apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"sync",data:state})});
-    let j=await r.json();if(!j.ok)throw new Error(j.error||"Senkronizasyon başarısız");
-    if(j.data){let api=state.apiUrl;state=j.data;state.apiUrl=state.apiUrl||api;save(false);render()}
-    syncState.textContent=j.direction==="pull"?"✓ Drive'dan güncellendi":"✓ Google Drive senkron";syncState.className="syncok";lastCloudCheck=Date.now();
-  }catch(e){syncState.textContent="✕ Senkron hatası";syncState.className="syncbad";if(!silent)alert("Google Drive senkronizasyonu başarısız: "+e.message)}
+function saveApi(){state.apiUrl=apiUrl.value.trim();save(false);syncState.textContent=state.apiUrl?"Drive bağlantısı kaydedildi":"Drive bağlantısı yok";if(state.apiUrl)pullNow(true)}
+async function apiCall(payload){
+  let r=await fetch(state.apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+  let j=await r.json();if(!j.ok)throw new Error(j.error||"Senkronizasyon başarısız");return j;
 }
-function checkCloud(){if(state.apiUrl&&Date.now()-lastCloudCheck>2500)syncNow(true)}
-if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js?v=5.2").then(r=>r.update());
+function adoptRemote(j){
+  if(!j.data)return;let api=state.apiUrl;state=j.data;state.apiUrl=api||state.apiUrl||"";state.serverRevision=j.revision??state.serverRevision??0;state.localDirty=false;save(false);render();
+}
+async function pullNow(silent=false){
+  if(!state.apiUrl){if(!silent)alert("Önce Apps Script Web App URL'sini girin.");return}
+  if(isSyncing)return;isSyncing=true;if(!silent)syncState.textContent="Drive kontrol ediliyor…";
+  try{let j=await apiCall({action:"pull"});let rr=j.revision||0,lr=state.serverRevision||0;if(rr>lr||!state.serverRevision){adoptRemote(j);syncState.textContent="✓ Drive'dan güncellendi"}else syncState.textContent="✓ Güncel";syncState.className="syncok";lastCloudCheck=Date.now()}
+  catch(e){syncState.textContent="✕ Senkron hatası";syncState.className="syncbad";if(!silent)alert("Google Drive senkronizasyonu başarısız: "+e.message)}finally{isSyncing=false}
+}
+async function pushNow(silent=false){
+  if(!state.apiUrl)return;if(isSyncing){clearTimeout(syncTimer);syncTimer=setTimeout(()=>pushNow(silent),900);return}isSyncing=true;if(!silent)syncState.textContent="Drive'a kaydediliyor…";
+  try{let j=await apiCall({action:"push",baseRevision:state.serverRevision||0,data:state});if(j.direction==="conflict"){adoptRemote(j);syncState.textContent="✓ Daha yeni Drive verisi alındı"}else{state.serverRevision=j.revision||state.serverRevision||0;state.localDirty=false;localStorage.setItem(KEY,JSON.stringify(state));syncState.textContent="✓ Drive'a kaydedildi"}syncState.className="syncok";lastCloudCheck=Date.now()}
+  catch(e){syncState.textContent="✕ Senkron hatası";syncState.className="syncbad";if(!silent)alert("Google Drive senkronizasyonu başarısız: "+e.message)}finally{isSyncing=false}
+}
+async function syncNow(silent=false){await pullNow(silent)}
+function checkCloud(){if(state.apiUrl&&Date.now()-lastCloudCheck>2500)pullNow(true)}
+if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js?v=5.3").then(r=>r.update());
 let lastMobile=isMobile();window.addEventListener("resize",()=>{let m=isMobile();if(m!==lastMobile){lastMobile=m;render()}});
 window.addEventListener("focus",checkCloud);document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkCloud()});
 render();setTimeout(checkCloud,500);
